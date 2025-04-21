@@ -33,6 +33,9 @@ def get_views(panorama_height, panorama_width, window_size=64, stride=8):
         w_start = int((i % num_blocks_width) * stride)
         w_end = w_start + window_size
         views.append((h_start, h_end, w_start, w_end))
+    # Sort views based on their distance from the middle line of the width
+    middle_line = panorama_width // 2
+    views.sort(key=lambda view: abs((view[2] + view[3]) // 2 - middle_line))
     return views
 
 
@@ -121,23 +124,17 @@ class MultiDiffusion(nn.Module):
         views = get_views(height, width)
         count = torch.zeros_like(latent)
         value = torch.zeros_like(latent)
-        count_in = torch.zeros_like(latent)
-        value_in = torch.zeros_like(latent)
-        latent_in = latent.clone()
+
         self.scheduler.set_timesteps(num_inference_steps)
 
         with torch.autocast('cuda'):
             for i, t in enumerate(self.scheduler.timesteps):
                 count.zero_()
                 value.zero_()
-                count_in.zero_()
-                value_in.zero_()
-                latent_in = latent
+
                 for h_start, h_end, w_start, w_end in views:
-                    # count.zero_()
-                    # value.zero_()
                     masks_view = masks[:, :, h_start:h_end, w_start:w_end]
-                    latent_view = latent_in[:, :, h_start:h_end, w_start:w_end].repeat(len(prompts), 1, 1, 1)
+                    latent_view = latent[:, :, h_start:h_end, w_start:w_end].repeat(len(prompts), 1, 1, 1)
                     if i < bootstrapping:
                         bg = bootstrapping_backgrounds[torch.randint(0, bootstrapping, (len(prompts) - 1,))]
                         bg = self.scheduler.add_noise(bg, noise[:, :, h_start:h_end, w_start:w_end], t)
@@ -156,21 +153,35 @@ class MultiDiffusion(nn.Module):
                     # compute the denoising step with the reference model
                     latents_view_denoised = self.scheduler.step(noise_pred, t, latent_view)['prev_sample']
 
-                    value[:, :, h_start:h_end, w_start:w_end] += (latents_view_denoised * masks_view).sum(dim=0,
-                                                                                                          keepdims=True)
+                    value[:, :, h_start:h_end, w_start:w_end] += (latents_view_denoised * masks_view).sum(dim=0, keepdims=True)
                     count[:, :, h_start:h_end, w_start:w_end] += masks_view.sum(dim=0, keepdims=True)
-                    count_in[:, :, h_start:h_end, w_start:w_end] += masks_view.sum(dim=0, keepdims=True)
-                    value_in[:, :, h_start:h_end, w_start:w_end] += (latents_view_denoised * masks_view).sum(dim=0,
-                                                                                                          keepdims=True)
-                    latent_in = torch.where(count_in > 0, value_in / count_in, value_in)
+
+                    # if w_start == 0:
+                    #     latent[:, :, h_start:h_end, w_start:w_end] = (latents_view_denoised * masks_view).sum(dim=0, keepdims=True)
+                    # else:
+                    #     latent[:, :, h_start:h_end, w_end-8:w_end] = (latents_view_denoised * masks_view).sum(dim=0, keepdims=True)[:,:,:,-8:]
+
+                    if i < 10:
+                        latent[:, :, h_start:h_end, w_start:w_end] = \
+                            0.3 * (latents_view_denoised * masks_view).sum(dim=0, keepdims=True) + \
+                            0.7 * latent[:, :, h_start:h_end, w_start:w_end] 
 
                 # take the MultiDiffusion step
                 latent = torch.where(count > 0, value / count, value)
+
+                if i % 5 == 0 or t == 1:
+                    self.save_latent(latent, i)
 
         # Img latents -> imgs
         imgs = self.decode_latents(latent)  # [1, 3, 512, 512]
         img = T.ToPILImage()(imgs[0].cpu())
         return img
+    
+    @torch.no_grad()
+    def save_latent(self, latent, i=0):
+        imgs = self.decode_latents(latent)  # [1, 3, 512, 512]
+        img = T.ToPILImage()(imgs[0].cpu())
+        img.save(f'output/seq/{i:02d}.png')
 
 
 def preprocess_mask(mask_path, h, w, device):
@@ -186,11 +197,11 @@ def preprocess_mask(mask_path, h, w, device):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--mask_paths', type=list, default=['/home/kenny/16726/final_project/imgs/image.png'])
+    parser.add_argument('--mask_paths', type=list, default=['input/greenfield.png'])
     # important: it is necessary that SD output high-quality images for the bg/fg prompts.
-    parser.add_argument('--bg_prompt', type=str, default='A stadium full of people.')
-    parser.add_argument('--bg_negative', type=str, default='')  # 'artifacts, blurry, smooth texture, bad quality, distortions, unrealistic, distorted image'
-    parser.add_argument('--fg_prompts', type=list, default=['a soccer field from stadium audience view'])
+    parser.add_argument('--bg_prompt', type=str, default='A stadium holding a soccer game, full of people')
+    parser.add_argument('--bg_negative', type=str, default='artifacts, blurry, smooth texture, bad quality, distortions, unrealistic, distorted image')  # 'artifacts, blurry, smooth texture, bad quality, distortions, unrealistic, distorted image'
+    parser.add_argument('--fg_prompts', type=list, default=['a green field of a stadium'])
     parser.add_argument('--fg_negative', type=list, default=['artifacts, blurry, smooth texture, bad quality, distortions, unrealistic, distorted image'])  # 'artifacts, blurry, smooth texture, bad quality, distortions, unrealistic, distorted image'
     parser.add_argument('--sd_version', type=str, default='2.0', choices=['1.5', '2.0'],
                         help="stable diffusion version")
@@ -199,13 +210,19 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=20)
     parser.add_argument('--steps', type=int, default=50)
     # bootstrapping encourages high fidelity to tight masks, the value can be lowered is most cases
-    parser.add_argument('--bootstrapping', type=int, default=1)
+    parser.add_argument('--bootstrapping', type=int, default=10)
     opt = parser.parse_args()
     # mask 数量 #### important!
     sh = 1
     opt.mask_paths = opt.mask_paths[:sh]
     opt.fg_prompts = opt.fg_prompts[:sh]
     opt.fg_negative = opt.fg_negative[:sh]
+
+    # opt.bg_prompt = "a vast Martian landscape with red rocky terrain, realistic and highly detailed"
+    # opt.fg_prompts = ["rows of houses with detailed architecture, realistic lighting, and natural surroundings"]
+
+    opt.bg_prompt = "A bird's eye view of Manhattan city, showcasing skyscrapers, streets, and the iconic cityscape, highly detailed and realistic"
+    opt.fg_prompts = ["A bird's eye view of a dense forest with lush green trees, winding paths, and sunlight filtering through the canopy, highly detailed and realistic"]
 
     seed_everything(opt.seed)
 
@@ -224,5 +241,5 @@ if __name__ == '__main__':
     img = sd.generate(masks, prompts, neg_prompts, opt.H, opt.W, opt.steps, bootstrapping=opt.bootstrapping)
 
     # save image based on time name
-    img.save(f'/home/kenny/16726/final_project/out/out_{time.strftime("%Y%m%d_%H%M%S")}.png')
+    img.save(f'output/{time.strftime("%m%d_%H%M")}.png')
 
