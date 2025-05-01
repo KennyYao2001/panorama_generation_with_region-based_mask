@@ -197,7 +197,7 @@ def preprocess_mask(mask_path, h, w, device):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--mask_paths', type=list, default=['input/greenfield.png'])
+    parser.add_argument('--mask_paths', type=list, default=['input/polygon.png'])
     # important: it is necessary that SD output high-quality images for the bg/fg prompts.
     parser.add_argument('--bg_prompt', type=str, default='A stadium holding a soccer game, full of people')
     parser.add_argument('--bg_negative', type=str, default='artifacts, blurry, smooth texture, bad quality, distortions, unrealistic, distorted image')  # 'artifacts, blurry, smooth texture, bad quality, distortions, unrealistic, distorted image'
@@ -221,8 +221,11 @@ if __name__ == '__main__':
     # opt.bg_prompt = "a vast Martian landscape with red rocky terrain, realistic and highly detailed"
     # opt.fg_prompts = ["rows of houses with detailed architecture, realistic lighting, and natural surroundings"]
 
-    opt.bg_prompt = "A bird's eye view of Manhattan city, showcasing skyscrapers, streets, and the iconic cityscape, highly detailed and realistic"
-    opt.fg_prompts = ["A bird's eye view of a dense forest with lush green trees, winding paths, and sunlight filtering through the canopy, highly detailed and realistic"]
+    # opt.fg_prompts = ["inside view of an active volcano crater, highly detailed, glowing magma, molten lava, billowing sulfur smoke, volcanic rocks, intense heat, realistic, dramatic lighting, 4k resolution, professional photography"]
+    # opt.bg_prompt = "aerial view of snow-covered landscape, pristine white snow, winter wonderland, highly detailed, crisp clear day, realistic texture, professional photography, 4k resolution, cinematic lighting"
+    opt.fg_prompts = ["a massive door floating in the starry night sky, enormous ancient doorway suspended among the stars, cosmic portal, intricate details, mystical entrance, celestial background with twinkling stars, deep space, ethereal glow, highly detailed, photorealistic, 8k"]
+    opt.bg_prompt = "a natural night sky, stars twinkling in the darkness, crescent moon, deep blue and black hues, realistic cosmic view, clear atmosphere, highly detailed, professional photography, 4k resolution, cinematic lighting"
+
 
     seed_everything(opt.seed)
 
@@ -241,5 +244,5 @@ if __name__ == '__main__':
     img = sd.generate(masks, prompts, neg_prompts, opt.H, opt.W, opt.steps, bootstrapping=opt.bootstrapping)
 
     # save image based on time name
-    img.save(f'output/{time.strftime("%m%d_%H%M")}.png')
+    img.save(f'output/{time.strftime("%m%d_%H%M%S")}.png')
 
