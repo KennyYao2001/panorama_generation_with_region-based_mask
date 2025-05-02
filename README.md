@@ -1,6 +1,6 @@
 # Panorama Generation with Region-Based Control
 
-![Generated Panorama](./imgs/case2.jpg)
+![Generated Panorama](./imgs/case5.jpg)
 
 This repository presents our final project for the Carnegie Mellon University course **16-726: Learning-Based Image Synthesis (Spring 2025)**. We propose a novel pipeline for generating panoramic images with **region-based semantic control**, improving upon the MultiDiffusion framework by addressing its limitations in coherence and region consistency.
 
@@ -49,16 +49,14 @@ Diffusion models have shown strong capabilities in image synthesis, including pa
 
 A representative result is shown below, where the background consists of Manhattan’s skyline and the foreground shows a forest park. The generation respects the provided masks and text prompts for each region.
 
-![Teaser](./assets/teaser.png)
+![Teaser](./imgs/case2.jpg)
 
 ## File Structure
 
 ```bash
-├── assets/                     # Visual examples and figures
-├── configs/                   # Configuration files for generation
-├── scripts/                   # Code for image generation
-├── models/                    # Optional pre-trained models
-├── results/                   # Generated samples
+├── imgs/                      # Visual examples and figures
+├── input/                     # Provided masks
+├── regoin_based.py            # Main Code for panorama image generation
 └── README.md                  # Documentation
 ```
 
