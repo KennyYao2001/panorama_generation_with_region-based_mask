@@ -1,5 +1,7 @@
 # Panorama Generation with Region-Based Control
 
+![Generated Panorama](./imgs/case2.jpg)
+
 This repository presents our final project for the Carnegie Mellon University course **16-726: Learning-Based Image Synthesis (Spring 2025)**. We propose a novel pipeline for generating panoramic images with **region-based semantic control**, improving upon the MultiDiffusion framework by addressing its limitations in coherence and region consistency.
 
 ## Authors
